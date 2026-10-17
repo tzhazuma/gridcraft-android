@@ -1,0 +1,10 @@
+# Upstream clones are fetched, never committed (they are the upstream projects, not ours).
+src/
+# Build scratch.
+logs/
+out/
+shots/
+# Gradle.
+.gradle/
+**/build/
+**/jniLibs/
