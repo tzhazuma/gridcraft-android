@@ -12,9 +12,19 @@
 
 ## 0. 一句话结论
 
-GridCraft 的 Android 移植**编译链路已完全打通**：Rust `cdylib` → `libmain.so`(34.7 MB) → APK(31.0 MB)，
-0 error、16 KB 页对齐通过、`aapt2` 校验通过。**唯一未完成的环节是真机安装截图——设备处于锁屏，
-vivo 会静默丢弃安装，而解锁手势（双指上滑）无法用 adb 合成。见 §6。**
+**两个移植的编译链路都已完全打通**，各自有独立 GitHub 仓库和带 APK 的 release：
+
+| 移植 | `libmain.so` | APK | 仓库 / release |
+|---|---|---|---|
+| **GridCraft 0.7.0** | 34,719,928 B | **31,046,808 B** | [`tzhazuma/gridcraft-android`](https://github.com/tzhazuma/gridcraft-android) · [v0.7.0](https://github.com/tzhazuma/gridcraft-android/releases/tag/v0.7.0) |
+| **ArtCraft Launcher 0.4.1** | 21,720,624 B | **23,547,020 B** | [`tzhazuma/craft-launcher-android`](https://github.com/tzhazuma/craft-launcher-android) · [v0.4.1](https://github.com/tzhazuma/craft-launcher-android/releases/tag/v0.4.1) |
+
+两者都是 0 error、`zipalign -c -P 16` 通过、`aapt2` 校验通过、LOAD 段 0x4000 对齐。
+启动器的下载地址已改为指向 `tzhazuma/<app>-android`（见 §9 与
+[docs/LAUNCHER-DOWNLOAD-URLS.md](docs/LAUNCHER-DOWNLOAD-URLS.md)），并有测试证明。
+
+**唯一未完成的环节是真机安装截图——设备处于锁屏，vivo 会静默丢弃安装，而解锁手势（双指上滑）
+无法用 adb 合成。见 §6。**
 
 ---
 
@@ -79,8 +89,10 @@ export CARGO_BUILD_JOBS=4          # 18 GB 内存下的上限
 
 | 产物 | 路径 | 大小 | SHA-256 |
 |---|---|---|---|
-| Rust 动态库 | `src/gridcraft/apps/gridcraft-android/jniLibs/arm64-v8a/libmain.so` | 34,719,928 B | `9d42492d7e29776cf81382d98c2d5955915d1b8f1c51adabe6ec2121227b5a38` |
-| APK | `out/GridCraft-0.7.0-android-arm64.apk` | 31,046,808 B | `e2844f5c4ae92cac595fe139be586e13af2662715cf23afb7bdde055f11a431a` |
+| GridCraft Rust 动态库 | `src/gridcraft/apps/gridcraft-android/jniLibs/arm64-v8a/libmain.so` | 34,719,928 B | `9d42492d7e29776cf81382d98c2d5955915d1b8f1c51adabe6ec2121227b5a38` |
+| GridCraft APK | `out/GridCraft-0.7.0-android-arm64.apk` | 31,046,808 B | `e2844f5c4ae92cac595fe139be586e13af2662715cf23afb7bdde055f11a431a` |
+| Launcher Rust 动态库 | `src/craft-launcher/apps/craft-launcher-android/jniLibs/arm64-v8a/libmain.so` | 21,720,624 B | — |
+| Launcher APK | `out/ArtCraftLauncher-0.4.1-android-arm64.apk` | 23,547,020 B | `f3e3dc339ad37c02f03f063e53c0f07084ab1bb80a6bf5b47d46a49440283437` |
 
 ```
 $ cargo +stable ndk -t arm64-v8a build --release -p gridcraft-android
@@ -103,6 +115,42 @@ $ llvm-readelf -lW libmain.so | grep LOAD
   LOAD 0x66ddb0  0x0000000000671db0 ... 0x108c150 R E 0x4000
   LOAD 0x16f9f00 0x0000000001701f00 ... 0x0b3988  RW  0x4000
   LOAD 0x17ad890 0x00000000017b9890 ... 0x001d20  RW  0x4000
+```
+
+### ArtCraft Launcher 0.4.1
+
+```
+$ cargo +stable ndk -t arm64-v8a build --release -p artcraft-launcher-android
+== cargo exit code: 0
+== artifact: .../libmain.so (21720624 bytes)          # 0 error
+
+$ aapt2 dump badging out/ArtCraftLauncher-0.4.1-android-arm64.apk
+package: name='ai.storyteller.artcraftlauncher' versionCode='1' versionName='0.4.1' ...
+targetSdkVersion:'35'
+application-label:'ArtCraft Launcher'
+launchable-activity: name='ai.storyteller.artcraftlauncher.MainActivity'
+native-code: 'arm64-v8a'
+application-icon-480:'res/BW.xml'
+
+$ zipalign -c -P 16 -v 4 out/ArtCraftLauncher-0.4.1-android-arm64.apk
+== zipalign -P 16: OK (16 KB page aligned)
+
+$ strings -a lib/arm64-v8a/libmain.so | grep -c tzhazuma
+1                                                      # 我们自己的 release owner 编进了产物
+```
+
+> **Android 包名与上游 bundle id 不同**：上游是 `ai.storyteller.artcraft-launcher`，连字符在
+> Android 的 `applicationId` / Java 包里**不合法**（AGP 报
+> `Namespace ... is not a valid Java package name as 'artcraft-launcher' is not a valid Java identifier`）。
+> Android 包名去掉连字符：**`ai.storyteller.artcraftlauncher`**。这是唯一一处移植版与上游标识
+> 不同的地方，记在 `scripts/env.sh` 的 `artcraft_app_id()` 里。
+
+### 上游补丁可复现性
+
+```bash
+$ git clone --depth 1 https://github.com/storytold/craft-launcher.git cl && cd cl
+$ git apply --check .../0001-release-owner-override.patch
+PATCH APPLIES CLEANLY to pristine upstream
 ```
 
 ---
@@ -173,7 +221,10 @@ fn android_main(app: AndroidApp) {          // 与 crates/platform 的既有先�
 | 9 | 大 APK 走无线 adb | `adb install` 永久挂住（包其实已装上） | 所有 adb 调用加 `timeout`；超时后改用「查包名是否存在」判定 |
 | 10 | `mipmap-*dpi/*.webp` 继承自别的 app | 非 FilmCraft 的 app 显示 FilmCraft 图标 | 模板不带图标；每个 app 装自己的矢量集 |
 | 11 | egui 默认字体无 CJK | 中文渲染成方块 | 运行时挂 `/system/fonts/NotoSansCJK-Regular.ttc` 到 family 末尾 |
-| 12 | `dirs` 在 Android 返回 `None` | `Paths::new()` 掉进 `temp_dir()`（Android app 写不了 `/tmp`） | 需给 native crate 加 host 注入 data root 的口子（launcher 部分待做） |
+| 12 | `dirs` 在 Android 返回 `None` | `Paths::new()` 掉进 `temp_dir()`（Android app 写不了 `/tmp`） | 给 native crate 加 `Paths::set_root()`，壳在 backend 构造前注入 `internal_data_path()` |
+| 13 | `.gitignore` 里没锚定的 `src/` | 它同时匹配 `ports/<app>-android/src/` 和 `templates/.../app/src/`，**第一次 push 因此漏掉了 port 的 lib.rs 和模板的 manifest/MainActivity** | 一律写 `/src/`（带前导斜杠）；push 后 `git ls-files` 核对关键文件在不在 |
+| 14 | 上游 bundle id 带连字符 | AGP 报 `Namespace 'ai.storyteller.artcraft-launcher' is not a valid Java package name` | Android 包名去连字符 → `ai.storyteller.artcraftlauncher` |
+| 15 | 目录名 ≠ crate 名 | `cargo ndk -p craft-launcher-android` 报 `unknown package`（crate 实际叫 `artcraft-launcher-android`） | `build-so.sh` 从 `ports/<pkg>/Cargo.toml` 读 `[package] name` |
 
 ---
 
@@ -219,27 +270,34 @@ scripts/device-smoke.sh ai.storyteller.gridcraft .MainActivity GridCraft gridcra
   `interact_size = 40×40`、`show_tooltips_only_when_still = true`）；真正的触控布局是产品级工作量。
 - **中文界面**：CJK **字形**已回退，中文单元格能正常显示；界面语言仍是英文。
 
-### craft-launcher（进行中）
-已实测 **编译**通过（`cargo +stable ndk check --target aarch64-linux-android`，0 error）：
-- `artcraft-launcher-ui-egui` —— 真正的启动器 egui UI
-- `artcraft-launcher-native` —— 真正的下载/安装后端（含 ureq + rustls）
+### craft-launcher 首版缺的
+`artcraft-launcher-ui-egui`（真正的 UI）和 `artcraft-launcher-native`（真正的下载/安装后端，
+含 ureq + rustls）都是**上游原样复用**，两者 `check --target aarch64-linux-android` 0 error，
+`libmain.so` 已产出。三处运行时适配都在补丁里解决了：
 
-剩余运行时问题：
 1. **`rustls-platform-verifier 0.7.1` 在 Android 需要额外 Kotlin 组件**，并且要从 GitHub Packages
-   拉 Maven 包（`org.rustls:rustls-platform-verifier-android`），需要 token。**绕开方案**：改
-   `crates/native/src/http.rs` 里唯一那处 `RootCerts::PlatformVerifier`，Android 上改成
-   `RootCerts::new_with_certs(...)` 读系统 CA 目录——设备上实测有 **149 个**
-   `/system/etc/security/cacerts/*.0`。仍然是「OS 决定信任什么」，且不引入新的 Gradle/Maven 依赖。
-2. **`dirs` 在 Android 返回 `None`** → `Paths::new()` 需要 host 注入 data root
-   （`AndroidApp::internal_data_path()`）。
-3. 桌面壳的 `notify-rust` / `rfd` / `tray-icon` / `zbus` / `single_instance` 在 Android 上要
-   么 cfg 掉、要么换成 Android 等价物（通知、SAF、Intent）。**注意**：因为移植是**新建 crate**
-   而不是改 `apps/artcraft-launcher`，这些依赖根本不会被引入，桌面 app crate 一行都不用动。
-4. `single_instance` 用 loopback TCP 47413 端口做单实例握手——Android 沙盒内可用，无需改。
+   拉 Maven 包（`org.rustls:rustls-platform-verifier-android`）。**已绕开**：`crates/native/src/http.rs`
+   那唯一一处 `RootCerts::PlatformVerifier` 在 Android 上改成 `RootCerts::new_with_certs(...)`
+   读 `/system/etc/security/cacerts`（设备上实测 **149 个** `*.0`）。仍是「OS 决定信任什么」，
+   且不引入新的 Gradle/Maven 依赖。**代价**：放弃吊销检查（CRL/OCSP）和用户安装的根证书——
+   对 GitHub 的证书没影响，对企业 MITM 代理有影响。
+2. **`dirs` 在 Android 返回 `None`** → 补丁给 native crate 加了 `Paths::set_root()`，
+   移植壳在 backend 构造**之前**注入 `AndroidApp::internal_data_path()`。
+3. 桌面壳的 `notify-rust` / `rfd` / `tray-icon` / `zbus` 在 Android 上不需要 cfg 掉：因为移植是
+   **新建 crate**，这些依赖根本不会被引入，`apps/artcraft-launcher` 一行都不用改。
+   `single_instance`（loopback TCP 47413）原样保留，Android 沙盒内可用。
+
+仍然没做的（都是产品级工作量，不影响「能起来」）：
+- **通知**：只有 logcat，没有真的系统通知（要 JNI 桥到 `NotificationManager`）。
+- **文件夹选择**：`pick_folder` 是 `None`，`install_locations.root` 改不了（要 SAF）。
+- **安装语义**：`NativeBackend` 装的是**桌面包**（`.dmg`/`.msi`/`.AppImage`/`.deb`）。Android 上
+  它只应该装**我们自己的 APK release**——这需要新增一个 Android 的 `PackageKind` 并走
+  `PackageInstaller` Intent。**这一层没做**，所以现在启动器会显示「没有适合这个平台的包」，
+  而不会去下载一个装不了的桌面包（这正是我们要的行为，但还不是完整的安装流程）。
 
 ### 其他
-- 每个移植要**独立 GitHub 仓库**并带 release（见 §8）。
-- craft-launcher 的下载地址要指向我们自己的 release（见 §9）。
+- ✅ 每个移植有**独立 GitHub 仓库**并带 release（见 §8）。
+- ✅ craft-launcher 的下载地址指向我们自己的 release（见 §9）。
 
 ---
 
@@ -247,27 +305,41 @@ scripts/device-smoke.sh ai.storyteller.gridcraft .MainActivity GridCraft gridcra
 
 命名跟已有惯例（`tzhazuma/freecad-android`、`blender-android`、`octave-android`、`dsh-android`）：
 
-| 仓库 | 内容 |
-|---|---|
-| `tzhazuma/gridcraft-android` | GridCraft 的 Android 移植（port crate + 脚本 + STATUS） |
-| `tzhazuma/craft-launcher-android` | ArtCraft Launcher 的 Android 移植 |
+| 仓库 | 内容 | release |
+|---|---|---|
+| [`tzhazuma/gridcraft-android`](https://github.com/tzhazuma/gridcraft-android) | GridCraft 移植 + 共享工具链（scripts/templates/icons/docs） | [v0.7.0](https://github.com/tzhazuma/gridcraft-android/releases/tag/v0.7.0) — `GridCraft-0.7.0-android-arm64.apk` |
+| [`tzhazuma/craft-launcher-android`](https://github.com/tzhazuma/craft-launcher-android) | ArtCraft Launcher 移植（port crate + 上游补丁 + 自己的脚本副本） | [v0.4.1](https://github.com/tzhazuma/craft-launcher-android/releases/tag/v0.4.1) — `ArtCraftLauncher-0.4.1-android-arm64.apk` |
 
-APK 走 **GitHub Releases**，不进 git 历史（31 MB 二进制）。
+APK 走 **GitHub Releases**，不进 git 历史。每个 per-port 仓库的暂存树在
+`dist-repos/<repo>/`（已 gitignore），由 workspace 的 `ports/`、`scripts/`、`templates/`、`icons/`
+拷贝而成。
 
 ---
 
 ## 9. craft-launcher 的下载地址
 
-启动器的下载 URL 由 `crates/core/src/catalog.rs` 里每个 app 的 `repo` 字段决定：
+启动器的下载 URL 由「某个 app 的 `owner/repo`」决定，而那个字符串**只在一个函数里产生**：
 
 ```
-crates/core/src/release.rs:65   format!("https://github.com/{repo}/releases/download/")
-crates/core/src/feed.rs:191     format!("https://github.com/{repo}/releases/")
+crates/core/src/release.rs:64    format!("https://github.com/{repo}/releases/download/")
+crates/core/src/feed.rs:191      format!("https://github.com/{repo}/releases/")
+crates/native/src/backend.rs:766 fn feed_repo(feed, app) -> String      ← 唯一接缝
 ```
 
-所以「指向我们自己移植的 GitHub 下载链接」= 把 release 查询的 repo 从 `storytold/<app>`
-换成 `tzhazuma/<app>-android`，同时**保留** `repo_url()` / `website()` 指向上游（文档/官网链接
-不该被改）。做法与验证见 `docs/LAUNCHER-DOWNLOAD-URLS.md`。
+改动（`ports/craft-launcher-android/upstream/0001-release-owner-override.patch`）：
+
+- `catalog.rs` 新增 `RELEASE_OWNER: Option<&str> = Some("tzhazuma")` 与
+  `CraftApp::release_repo()` → `tzhazuma/<id>-android`；
+- `feed_repo()` 在设置了覆盖时直接返回它，**并且故意不咨询 release feed**（feed 描述上游桌面版，
+  跟着它的 `repo_renames` 会把查询拉回一个本构建不该安装的仓库）；
+- `repo_url()` / `releases_url()` / `website()` **保持不变**，仍指向上游——它们是文档链接。
+
+验证：`cargo +stable test -p artcraft-launcher-core --lib` → **34 passed; 0 failed**，其中新增的
+`a_port_looks_releases_up_in_its_own_repositories` 对全部 13 个 app 断言了新的下载前缀与未变的
+文档链接；`crates/native/src/backend.rs` 里另有 `a_port_asks_its_own_repositories_for_releases`
+走真正被调用的 `feed_repo()`（Android target 上 `check --tests` 通过）。
+
+完整链路、13 个 app 的地址表和验证输出见 `docs/LAUNCHER-DOWNLOAD-URLS.md`。
 
 ---
 
@@ -280,14 +352,17 @@ crates/core/src/feed.rs:191     format!("https://github.com/{repo}/releases/")
 ├── scripts/
 │   ├── env.sh                 共享环境（PATH/NDK/JDK/lock/设备）
 │   ├── build-lock.sh          整机构建串行化（fcntl）
-│   ├── build-so.sh            <app> → libmain.so
+│   ├── build-so.sh            <app> → libmain.so（crate 名从 ports/<pkg>/Cargo.toml 读）
 │   ├── build-apk.sh           <app> → out/<Label>-<ver>-android-arm64.apk
 │   ├── make-shell.sh          生成 Gradle 外壳 + 装该 app 的图标
 │   └── device-smoke.sh        装机/启动/logcat/截图（含锁屏门禁）
 ├── templates/android-shell/   Gradle 骨架（AGP 9.1.0 / Gradle 9.3.1 / JDK 21）
 ├── icons/<app>/res/           每个 app 的矢量 adaptive icon（来自 icon-designer）
 ├── ports/<app>-android/       移植源码（source of truth）
-├── src/<app>/                 上游浅克隆（.gitignore 掉）
+│   └── craft-launcher-android/upstream/*.patch   需要的上游改动
+├── docs/LAUNCHER-DOWNLOAD-URLS.md                下载地址链路 + 证明
+├── dist-repos/<repo>/         per-port 仓库暂存树（gitignore 掉）
+├── src/<app>/                 上游浅克隆（gitignore 掉）
 ├── out/                       APK
 ├── shots/                     真机截图
 └── logs/                      构建日志

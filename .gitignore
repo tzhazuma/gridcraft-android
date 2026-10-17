@@ -5,6 +5,8 @@
 /logs/
 /out/
 /shots/
+# Per-port repository staging trees, each pushed to its own GitHub repository.
+/dist-repos/
 # Gradle.
 .gradle/
 **/build/

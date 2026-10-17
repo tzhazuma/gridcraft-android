@@ -47,6 +47,12 @@ scripts/build-apk.sh craft-launcher
 目录是 `apps/craft-launcher-android`，crate 是 `artcraft-launcher-android`。`cargo ndk -p` 要的是
 crate 名。
 
+**Android 包名与上游 bundle id 不同**：上游是 `ai.storyteller.artcraft-launcher`，而连字符在
+Android 的 `applicationId` / Java 包里**不合法**（AGP 直接报
+`Namespace ... is not a valid Java package name as 'artcraft-launcher' is not a valid Java identifier`）。
+所以 Android 包名去掉连字符：**`ai.storyteller.artcraftlauncher`**。这是唯一一处移植版和上游标识
+不一样的地方，`scripts/env.sh` 的 `artcraft_app_id()` 里记着。
+
 > **注意构建时间**：上游 `[profile.release]` 是 `lto = "thin"` + `codegen-units = 1`。桌面发布二进制
 > 这样是对的，但在这个依赖图上会很慢。要快可以：
 > `CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`（产物更大）。

@@ -53,10 +53,15 @@ artcraft_check_env() {
 }
 
 # Android packages of every port in this workspace.
+#
+# The launcher is the one place this differs from upstream: its bundle id is
+# `ai.storyteller.artcraft-launcher`, and a hyphen is not legal in an Android
+# `applicationId`/Java package, so the Android package drops it. Everything else is
+# `ai.storyteller.<app id>`.
 artcraft_app_id() {
   case "$1" in
     gridcraft)       echo "ai.storyteller.gridcraft" ;;
-    craft-launcher)  echo "ai.storyteller.artcraft-launcher" ;;
+    craft-launcher)  echo "ai.storyteller.artcraftlauncher" ;;
     *)               echo "ai.storyteller.$1" ;;
   esac
 }

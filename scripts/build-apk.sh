@@ -47,7 +47,9 @@ if [ -z "$VERSION_NAME" ]; then
 fi
 LABEL="$(grep -oE 'android:label="[^"]+"' "$ANDROID_DIR/app/src/main/AndroidManifest.xml" | head -1 | sed -E 's/.*"([^"]+)"/\1/')"
 [ -n "$LABEL" ] || LABEL="$APP"
-OUT="$ARTCRAFT_HOME/out/${LABEL}-${VERSION_NAME}-android-arm64.apk"
+# A display label may contain spaces ("ArtCraft Launcher"); a file name should not.
+STEM="$(printf '%s' "$LABEL" | tr -d ' ')"
+OUT="$ARTCRAFT_HOME/out/${STEM}-${VERSION_NAME}-android-arm64.apk"
 mkdir -p "$ARTCRAFT_HOME/out"
 cp -f "$APK_SRC" "$OUT"
 
