@@ -1,9 +1,10 @@
 # Upstream clones are fetched, never committed (they are the upstream projects, not ours).
-src/
+# Anchored: an unanchored `src/` also matches `ports/<app>-android/src/`, which IS ours.
+/src/
 # Build scratch.
-logs/
-out/
-shots/
+/logs/
+/out/
+/shots/
 # Gradle.
 .gradle/
 **/build/

@@ -23,6 +23,12 @@ PORT="$ARTCRAFT_HOME/ports/$PKG"
 [ -d "$CLONE" ] || { echo "FAIL: no clone at $CLONE"; exit 2; }
 [ -d "$PORT" ]  || { echo "FAIL: no port source at $PORT"; exit 2; }
 
+# The crate's package name need not match its directory: upstream's launcher is packaged
+# `artcraft-launcher` but lives in `apps/artcraft-launcher-android` here. `-p` takes the package
+# name, so read it from the port's own manifest rather than assuming.
+CRATE="$(awk '/^\[package\]/{f=1;next} f&&/^\[/{exit} f&&/^name[[:space:]]*=/{gsub(/.*=[[:space:]]*"|".*/,"");print;exit}' "$PORT/Cargo.toml")"
+[ -n "$CRATE" ] || { echo "FAIL: no [package] name in $PORT/Cargo.toml"; exit 2; }
+
 # The port source is the source of truth: always re-mirror before building so an edit made in the
 # clone can never silently win.
 rsync -a --delete --exclude 'jniLibs' --exclude 'android' "$PORT/" "$CLONE/apps/$PKG/" || exit 2
@@ -61,11 +67,12 @@ export CARGO_BUILD_JOBS="__JOBS__"
 # /Users/<name>/... to anyone running `strings libmain.so`.
 export RUSTFLAGS="--remap-path-prefix=$HOME=/build --remap-path-prefix=__CLONE__=/src"
 echo "[inner] cc: $(command -v cc || echo NOT_FOUND)"
-exec cargo +stable ndk -t arm64-v8a -o "apps/__PKG__/jniLibs" build __PROFILE__ -p __PKG__
+exec cargo +stable ndk -t arm64-v8a -o "apps/__PKG__/jniLibs" build __PROFILE__ -p __CRATE__
 INNER_EOF
 sed -i '' \
   -e "s|__CLONE__|$CLONE|g" \
   -e "s|__PKG__|$PKG|g" \
+  -e "s|__CRATE__|$CRATE|g" \
   -e "s|__PROFILE__|$PROFILE_FLAG|g" \
   -e "s|__ANDROID_HOME__|$ANDROID_HOME|g" \
   -e "s|__JAVA_HOME__|$JAVA_HOME|g" \
