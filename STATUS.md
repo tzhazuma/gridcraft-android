@@ -314,6 +314,23 @@ APK 走 **GitHub Releases**，不进 git 历史。每个 per-port 仓库的暂�
 `dist-repos/<repo>/`（已 gitignore），由 workspace 的 `ports/`、`scripts/`、`templates/`、`icons/`
 拷贝而成。
 
+**每个 release 必须带一个 `SHA256SUMS.txt`**（标准 `sha256sum` 格式，文件名叫这个，不能用
+`gh release upload <file>#SHA256SUMS.txt` 改 label —— 那只改显示名，URL 路径还是原名）。
+理由：GitHub API 被限额时，启动器走 release 页面回退路径，读
+`https://github.com/<repo>/releases/download/<tag>/SHA256SUMS.txt` 来重建 release；没有这个文件
+它会认为「这个 app 没有 release」。
+
+端到端验证（下载线上资产，和 `SHA256SUMS.txt`、和本地构建三方比对）：
+
+```
+$ curl -sSL -o GridCraft.apk .../releases/download/v0.7.0/GridCraft-0.7.0-android-arm64.apk
+http=200 bytes=31046808
+downloaded : e2844f5c4ae92cac595fe139be586e13af2662715cf23afb7bdde055f11a431a
+SHA256SUMS : e2844f5c4ae92cac595fe139be586e13af2662715cf23afb7bdde055f11a431a
+local build: e2844f5c4ae92cac595fe139be586e13af2662715cf23afb7bdde055f11a431a
+MATCH ✅  the launcher's checksum verification would pass
+```
+
 ---
 
 ## 9. craft-launcher 的下载地址
